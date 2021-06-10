@@ -1,0 +1,73 @@
+---
+title: "Manipulação de dados com os pacotes dplyr e tidyr"
+author: "Clauder"
+date: "08/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+ # Manipulação de dados com os pacotes dplyr e tidyr
+
+### Filtrando observações
+A primeira função que utilizaremos é a função filter() do pacote dplyr. Como já podemos deduzir, a função
+serve para filtrar observações. Antes de apresentar exemplos da função, vamos carregar o pacote tidyverse.
+
+```{r}
+#Criar um Dataframe
+
+df1 <- data.frame(
+  nome = c("Joao","Pedro","Amanda","Fabio", "Fernanda", "Gustavo"),
+  Altura = c(1.80,1.77,1.71,1.65,1.66,1.63),
+  idade = c(22,21,18,20,23,19),
+  sexo = c("M","M","F","M","F","M"),
+  peso = c(78.3,82.1,66.5,88.1,58,75.4),
+  fumante = c(TRUE, FALSE, FALSE, FALSE, TRUE,FALSE),
+  uf = c("PB","AL","PE","PE","SP","CE"),
+  renda = c(2,5,10,20,10,NA)
+)
+```
+
+```{r}
+df1
+```
+
+
+É verdade que já realizamos filtros utilizando a função subset() , mas utilizar a função filter() é
+igualmente simples, sem contar que podemos utilizá-la conjuntamente com outras funções do pacote dplyr,
+como veremos mais a diante.
+Vamos realizar nosso primeiro filtro no objeto df1 , de forma a selecionar apenas aquelas observações com
+variável peso acima de 70.
+
+
+
+```{r}
+filter(df1, peso > 70)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
