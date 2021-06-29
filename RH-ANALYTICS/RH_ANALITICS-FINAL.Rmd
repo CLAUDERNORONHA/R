@@ -1,0 +1,819 @@
+---
+title: "RH_ANALYTICS"
+author: "Clauder"
+date: "24/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## "RH_ANALYTICS"
+
+```{r}
+library(caret)
+library(ggplot2)
+library(gridExtra)
+library(data.table)
+library(car)
+library(caTools)
+library(corrplot)
+library(rpart)
+library(rpart.plot)
+
+```
+
+```{r}
+dados_rh <- fread('dados/dataset.csv')
+```
+
+### Transformando variáveis categóricas para o tipo fator
+```{r}
+dados_rh$Attrition                <- as.factor(dados_rh$Attrition)
+dados_rh$BusinessTravel           <- as.factor(dados_rh$BusinessTravel)
+dados_rh$Department               <- as.factor(dados_rh$Department)
+dados_rh$Education                <- as.factor(dados_rh$Education)
+dados_rh$EducationField           <- as.factor(dados_rh$EducationField)
+dados_rh$'Employee Source'        <- as.factor(dados_rh$'Employee Source')
+dados_rh$EnvironmentSatisfaction  <- as.factor(dados_rh$EnvironmentSatisfaction)
+dados_rh$Gender                   <- as.factor(dados_rh$Gender)
+dados_rh$JobInvolvement           <- as.factor(dados_rh$JobInvolvement)
+dados_rh$JobLevel                 <- as.factor(dados_rh$JobLevel)
+dados_rh$JobRole                  <- as.factor(dados_rh$JobRole)
+dados_rh$JobSatisfaction          <- as.factor(dados_rh$JobSatisfaction)
+dados_rh$MaritalStatus            <- as.factor(dados_rh$MaritalStatus)
+dados_rh$OverTime                 <- as.factor(dados_rh$OverTime)
+dados_rh$PerformanceRating        <- as.factor(dados_rh$PerformanceRating)
+dados_rh$RelationshipSatisfaction <- as.factor(dados_rh$RelationshipSatisfaction)
+dados_rh$StockOptionLevel         <- as.factor(dados_rh$StockOptionLevel)
+dados_rh$WorkLifeBalance          <- as.factor(dados_rh$WorkLifeBalance)
+```
+
+### Transformando variáveis numéricas para o tipo inteiro
+```{r}
+dados_rh$DistanceFromHome  <- as.integer(dados_rh$DistanceFromHome)
+dados_rh$MonthlyIncome     <- as.integer(dados_rh$MonthlyIncome)
+dados_rh$PercentSalaryHike <- as.integer(dados_rh$PercentSalaryHike)
+```
+
+
+
+### Drop dos níveis de fatores com 0 count
+
+```{r}
+dados <- droplevels(dados_rh)
+```
+
+```{r}
+summary(dados_rh)
+```
+
+
+### Engenharia de Atributos
+Criamos uma coluna de anos anteriores de experiência para visualizar melhor o 
+perfil de experiência do funcionário.
+```{r}
+dados_rh$PriorYearsOfExperience <- dados_rh$TotalWorkingYears - dados_rh$YearsAtCompany
+```
+
+A estabilidade no emprego (job tenure) é a medida do tempo que um funcionário está empregado 
+por seu empregador atual. A estabilidade no emprego de um funcionário é muito importante e 
+muitas vezes os empregadores consideram a estabilidade no emprego um critério para a contratação de novos funcionários. A permanência no emprego pode ser longa ou curta.
+
+Criamos um novo recurso de estabilidade média para traçar o perfil de permanência média dos funcionários em empresas anteriores.
+
+
+```{r}
+dados_rh$AverageTenure <- dados_rh$PriorYearsOfExperience / dados_rh$NumCompaniesWorked
+```
+```{r}
+View(dados_rh)
+```
+
+
+A estabilidade média produz valores como Inf devido à natureza de sua derivaçãoSubstituímos para zero.
+
+
+```{r}
+dados_rh$AverageTenure[!is.finite(dados_rh$AverageTenure)] <- 0
+```
+
+
+Analisamos e dividimos os dados como base na coluna Termination, que indica se o funcionário foi desligado da empresa.
+ 
+
+```{r}
+dados_rh_1 <- dados_rh[dados_rh$Attrition != 'Termination']
+dados_rh_1 <- droplevels(dados_rh_1)
+```
+```{r}
+dim(dados_rh_1)
+```
+
+```{r}
+summary(dados_rh_1)
+```
+
+### filtro demissão voluntaria 
+
+```{r}
+dados_rh_2 <- dados_rh[dados_rh$Attrition != 'Voluntary Resignation']
+dados_rh_2 <-droplevels(dados_rh_2)
+```
+```{r}
+dim(dados_rh_2)
+```
+```{r}
+summary(dados_rh_2)
+```
+
+
+
+
+## ANALISE E EXPLORATORIA EXTRAINDO INSIGHTS
+
+
+
+
+### Plots de análise Univariadas
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+ggplot(dados_rh) + geom_bar(aes(x = Gender))
+```
+Temos mais registro do sexo masculino do que feminino
+
+
+```{r}
+ggplot(dados_rh) + geom_density(aes(x = Age))
+#Utilizo o geom_density , Age ´e numerico (vamos criar a distribuição numerica)categorico utilizar é o ideal 
+
+```
+A maioroia dos funcionarios esta em 30 e 40 anos
+
+```{r}
+ggplot(dados_rh) + geom_bar(aes(x =Attrition))
+
+```
+A maioria dos funcionarios continuam empregados a minoria foram demitidos e outros pediram demissão. 
+A grande maioria continua na empresa
+
+```{r}
+ggplot(dados_rh) + geom_bar(aes(x = Department))
+```
+A maioria é de pesuisa e desenvolvimento , vendas tem uma parcela siguiificativa r recurso humano é a minoria dentro do quadro de funcionarios.
+
+```{r}
+ggplot(dados_rh) + geom_bar(aes(x  = JobRole))
+```
+Temos detalhado o quadro de funções dentro da IBM 
+
+
+```{r}
+ggplot(dados_rh) + geom_bar(aes(x =  Education)) + facet_grid(~ EducationField)
+```
+Temos a base da educação do quadro de funcionarios, a maioria estão em ciencia da vida ou na área médica. 
+
+
+
+
+
+### Multiplot Grid
+
+```{r}
+p.TotalWorkingYears       <- ggplot(dados_rh) + geom_density(aes(TotalWorkingYears))
+p.YearsAtCompany          <- ggplot(dados_rh) + geom_density(aes(YearsAtCompany))
+p.YearsSinceLastPromotion <- ggplot(dados_rh) + geom_density(aes(YearsSinceLastPromotion))
+p.YearsWithCurrManager    <- ggplot(dados_rh) + geom_density(aes(YearsWithCurrManager))
+p.YearsInCurrentRole      <- ggplot(dados_rh) + geom_density(aes(YearsInCurrentRole))
+p.PriorYearsOfExperience  <- ggplot(dados_rh) + geom_density(aes(PriorYearsOfExperience))
+
+```
+
+```{r}
+#Agora vamos chamar o grafico
+
+# Organiza no grid
+grid.arrange(p.TotalWorkingYears, 
+             p.YearsAtCompany, 
+             p.YearsSinceLastPromotion, 
+             p.YearsWithCurrManager, 
+             p.YearsInCurrentRole, 
+             p.PriorYearsOfExperience, 
+             nrow = 2, 
+             ncol = 3)
+```
+
+Comparação das variaveis, podemos constatar nos primeiros anos são maiores, e caindo conforme o tempo, nada de anormal dentro de uma empresa. 
+
+
+
+
+O estudo vai ser da seguinte forma, queremos saber o tempo de serviço de cada colaborador.
+Vamos descobrir a proporção de funcionarios com menos de alguns anos de experiência. Escolhemos os vamores de 1, 3, 5, 7, 10 anos.
+
+
+```{r}
+length(which(dados_rh$PriorYearsOfExperience < 1)) / length(dados_rh$PriorYearsOfExperience)  
+length(which(dados_rh$PriorYearsOfExperience < 3)) / length(dados_rh$PriorYearsOfExperience)   
+length(which(dados_rh$PriorYearsOfExperience < 5)) / length(dados_rh$PriorYearsOfExperience)   
+length(which(dados_rh$PriorYearsOfExperience < 7)) / length(dados_rh$PriorYearsOfExperience)   
+length(which(dados_rh$PriorYearsOfExperience < 10)) / length(dados_rh$PriorYearsOfExperience)  
+
+```
+### Exemplo de insight:
+58% dos funcionários têm menos de 3 anos de experiência de trabalho antes de entrar na IBM
+
+Possíveis problemas: conjuntos de habilidades subdesenvolvidos, base de jovens funcionários, mentalidade de "trabalho" imatura.
+
+
+## Idade
+
+```{r}
+length(which(dados_rh$Age < 30)) / length(dados_rh$Age)
+```
+Insight, temos dentro da empresa apenas 22% com a idade inferior a 30 anos.
+Ou seja, a base de funcionarios não é tão jovem.
+
+
+## Educação
+
+```{r}
+summary(dados_rh$Education)
+```
+
+```{r}
+#vamos verificar a proporção
+length(which(dados_rh$Education == 3)) / length(dados_rh$Education)
+length(which(dados_rh$Education == 4)) / length(dados_rh$Education)
+```
+Insight Educação
+
+Cerca de 39% dos funcionários são graduados e 27% realizaram o mestrado.
+A busca pelo ensino superior pode ter levado a uma diminuição da experiência de trabalho.
+
+
+
+
+Boxplot mostrando a distribuição do salário mensal para todos os 4 níveis 
+de satisfação no trabalho de 1-4
+
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(JobSatisfaction)), aes(JobSatisfaction, MonthlyIncome)) + geom_boxplot()
+```
+Não a sinais que um slario mais alto leva a uma maior satisfação no trabalho.
+
+Temos o outliers em todos os nivies de trabalho.
+
+Resumindo, salario mais alto não é garantia de satisfação no trabalho.
+
+
+
+
+```{r}
+
+#vamo susar somente o complete.obs , isso que dizer, vamos descartar qualquer valor ausente
+# Correlação
+cor(dados_rh$TotalWorkingYears, dados_rh$YearsAtCompany,          use = "complete.obs")#apenaso
+cor(dados_rh$YearsAtCompany,    dados_rh$YearsInCurrentRole,      use = "complete.obs")
+
+cor(dados_rh$YearsAtCompany,    dados_rh$YearsSinceLastPromotion, use = "complete.obs")
+cor(dados_rh$YearsAtCompany,    dados_rh$YearsWithCurrManager,    use = "complete.obs")
+cor(dados_rh$TotalWorkingYears, dados_rh$MonthlyIncome,           use = "complete.obs")
+cor(dados_rh$YearsAtCompany,    dados_rh$MonthlyIncome,           use = "complete.obs")  
+
+```
+Temos os resultado com a correlação positiva por serem perto de 1
+
+##### Scarteplot
+Agora vamos colocar em um grafico as duas ultimas correlação, TotalWorkingYears e YearsAtCompany
+
+```{r}
+ggplot(dados_rh) + geom_point(aes(TotalWorkingYears, MonthlyIncome))
+```
+Aparentemente a uma tendencia uma de crescimento, nada fora do normal
+
+
+```{r}
+ggplot(dados_rh) + geom_point(aes(YearsAtCompany, MonthlyIncome))
+```
+Média que uma variavel aumenta a outra aumenta, corresponde a normalidade.
+
+
+## Equilibrio da vida Pessoal e profissional e renda Mensal 
+
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(WorkLifeBalance)), aes(WorkLifeBalance, MonthlyIncome)) + 
+  geom_boxplot()
+```
+Os funcionários que avaliaram o equilíbrio entre vida profissional e pessoal igual a 1 também têm renda média mensal 
+significativamente mais baixa.
+Baixo equilíbrio entre vida profissional e baixo salário? Um problema que o departamento de RH precisa examinar.
+Numro 1 tem um baixo equilibrio na vida pessoal e profissional , o numero 4 tem alto equilibrio.
+ 
+
+O RH tem que observar o grupo numero um, o que pode esta acontecendo com a vida do grupo 1.
+uma aventual promoção ou aumento de salario pode ser um fato motivacional.
+
+Ou uma POssivel demissão.
+
+
+
+# Diferença salarial por Gênero.
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(Gender)), aes(Gender, MonthlyIncome, fill = Gender)) +
+  geom_boxplot() + 
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5, size = 10)) +
+  labs(x = "Gender", y = "Monthly Income", title = "Salário Mensal Entre Gêneros") +
+  coord_flip()
+```
+
+Insight:
+Não há sinais de discriminação de gênero; na verdade, as mulheres ganham um pouco mais, em média, desconsiderando todos os outros fatores.
+
+
+
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(JobRole))) + geom_boxplot(aes(JobRole, MonthlyIncome)) +
+  ggtitle("Salário Mensal Por Função")
+
+```
+
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(JobRole))) + geom_boxplot(aes(JobRole, AgeStartedWorking)) +
+  ggtitle("Idade Que Iniciou na Função")
+
+```
+O salario mensal munda conforme a função.
+
+```{r}
+
+ggplot(data = subset(dados_rh, !is.na(JobRole))) + geom_boxplot(aes(JobRole, Age)) +
+  ggtitle("Idade Por Função")
+```
+
+
+
+```{r}
+ggplot(data = subset(dados_rh, !is.na(JobRole))) + geom_boxplot(aes(JobRole, YearsAtCompany)) +
+  ggtitle("Tempo de Empresa (em anos)")
+```
+O cargo de gerente fica mais tempo que outras funções. O corpo d egestores formam os lideres da empresa.
+
+
+
+
+
+```{r}
+ggplot(data = na.omit(dados_rh)) + geom_bar(aes(JobRole, fill = Education), position = "fill") +
+  ggtitle("Nível de Educação Por Função") + 
+  ylab("Proportion")
+```
+
+P ara o nivel 5 da cor rosa, o numero de doutorados estão na área de pesquisa e desenvolvimento.
+
+
+#### Plots de análise multivariada para variáveis normalmente usadas durante o processo de contratação
+
+```{r}
+ggplot(data = dados_rh_1) + 
+  geom_bar(aes(x = Education , fill = Attrition), position = 'fill') + 
+  facet_grid(.~Department)
+
+
+
+
+```
+
+
+```{r}
+ggplot(data = dados_rh_1) + 
+  geom_bar(aes(x = Education , fill = Attrition), position = 'fill') + 
+  facet_grid(.~JobRole)
+```
+
+
+
+```{r}
+ggplot(data = dados_rh_1) + 
+  geom_bar(aes(x = EducationField , fill = Attrition), position = 'fill') + 
+  facet_grid(.~JobRole) + 
+  theme(axis.text.x = element_text(angle = -90, hjust = 0))
+```
+
+### Plots de análise multivariada para variáveis normalmente usadas após o processo de contratação
+
+```{r}
+# Plots de análise multivariada para variáveis normalmente usadas após o processo de contratação
+ggplot(dados_rh_1) + geom_bar(aes(x = Age, fill = Attrition), position = 'fill') 
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = Department, fill = Attrition), position = 'fill') 
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = DistanceFromHome, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = `Employee Source`, fill = Attrition), position = 'fill')
+
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = JobRole, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = MaritalStatus, fill = Attrition), position = 'fill')
+
+```
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = AverageTenure, fill = Attrition), position = 'fill')
+
+```
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(x = Education, fill = Attrition), position = 'fill')
+
+```
+
+
+
+
+
+
+
+### Plots de análise multivariada entre algumas variáveis e o status do funcionário
+
+```{r}
+
+ggplot(dados_rh_1) + geom_boxplot(aes(Attrition, MonthlyIncome))
+
+```
+
+
+
+```{r}
+ggplot(dados_rh_1) + geom_boxplot(aes(Attrition, PercentSalaryHike))
+
+```
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(TrainingTimesLastYear, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(BusinessTravel, fill = Attrition), position = 'fill')
+
+```
+
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(OverTime, fill = Attrition), position = 'fill')
+
+```
+
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(StockOptionLevel, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(EnvironmentSatisfaction, fill = Attrition), position = 'fill')
+
+```
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(JobSatisfaction, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(JobInvolvement, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(RelationshipSatisfaction, fill = Attrition), position = 'fill')
+
+```
+
+
+```{r}
+ggplot(dados_rh_1) + geom_bar(aes(WorkLifeBalance, fill = Attrition), position = 'fill')
+```
+
+
+
+
+
+
+
+## Modelagem Preditiva 
+
+Vamos concentrar nosso trabalho em tentar ajudar o RH a recrutar melhor visando evitar atritos e, consequentemente, demissões.
+
+Criaremos 5 versões do modelo e para cada um vamos explorar as opções e interpretar o resultado.
+
+
+
+
+
+### Primeira versão do modelo com algumas variáveis
+
+```{r}
+#glm regressão logistica
+# Attrition vai ser a variavel target, por isso utilizamos o sinal de ~
+#POsso fazer qualquer experimento com a quantidade de variavel infinita par ao meu modelo
+
+#Quando não tem nenhum * mostrar que não tem nenhuma relevancia para a target que é a variavel alvo.
+
+
+
+?glm
+
+modelo_v1 <- glm(Attrition ~ Age + Department + DistanceFromHome + `Employee Source` + 
+                   JobRole + MaritalStatus + AverageTenure + PriorYearsOfExperience + Gender + 
+                   Education + EducationField, 
+                 family = binomial, 
+                 data = dados_rh)
+
+#obs, aqui usei toda a minha base de dados, com isso não consigo fazer a previsão , o certo é dividir em treino e teste.
+
+```
+
+
+```{r}
+
+summary(modelo_v1)
+
+# A quantidade de asteriscos *** mostra a relevancia que tem para a variavel alvo.
+
+
+```
+
+```{r}
+?vif
+vif(modelo_v1)
+#Variaveis com maior importancia, concentar na primeira coluna, quando maior o numero maior vai ser a sua importancia.
+
+
+# modelo base, falta dividir a base em treino e teste para o experimento
+#
+```
+### Dividir em Treino e Teste
+#### Vou tirar do dataset pessoas que forma demitidas
+```{r}
+set.seed(2004)
+
+index_treino <- sample.split(Y = dados_rh_1$Attrition, SplitRatio = 0.7)#divisor 70% para treino dados verdadeiros
+dados_rh_1_treino <- subset(dados_rh_1, train = T)
+dados_rh_1_teste <- subset(dados_rh_1, train =  F)
+```
+
+
+
+## Segunda Versão do Modelo
+
+```{r}
+modelo_v2 <- glm(Attrition ~ Age + Department + DistanceFromHome + `Employee Source` + 
+                   JobRole + MaritalStatus + AverageTenure + PriorYearsOfExperience + Gender + 
+                   Education + EducationField, 
+                 family = binomial, 
+                 data = dados_rh_1_treino)#Vou utilizar a base de dados criado na versão V1, dados esse criando sem as pessoas demitidas. 
+
+
+```
+
+```{r}
+summary(modelo_v2)
+
+```
+
+```{r}
+vif(modelo_v2)
+```
+```{r}
+# Previsões
+threshold <- 0.5
+previsoes_v2 <- predict(modelo_v2, type = 'response', newdata = dados_rh_1_teste)
+previsoes_finais_v2 <- ifelse(previsoes_v2 > threshold, 'Voluntary Resignation', 'Current employee')
+table(dados_rh_1_teste$Attrition, previsoes_finais_v2)
+```
+quando a claaase era que o funcionario continuaria como empregado o nosso modelo previu 19328  
+
+Quando a classe real era pedido de demissão o nosso previu que continuaria como empregado no total de 3523, ou seja o nosso modelo errou. uma taxa de erro consideravel.
+POderiamos fazer uma balanceamento de classes para ter um modelo mais preciso. 
+
+
+
+
+## Terceira versão do modelo de treino e sem variaveis de educação
+
+```{r}
+modelo_v3 <- glm(Attrition ~ Age + Department + DistanceFromHome + `Employee Source` + 
+                   JobRole + MaritalStatus + AverageTenure + PriorYearsOfExperience + Gender, 
+                 family = binomial, 
+                 data = dados_rh_1_treino)
+
+```
+
+
+```{r}
+
+summary(modelo_v3)
+
+```
+
+```{r}
+vif(modelo_v3)
+```
+
+```{r}
+# Previsões
+threshold <- 0.5
+previsoes_v3 <- predict(modelo_v3, type = 'response', newdata = dados_rh_1_teste)
+previsoes_finais_v3 <- ifelse(previsoes_v3 > threshold, 'Voluntary Resignation', 'Current employee')
+table(dados_rh_1_teste$Attrition, previsoes_finais_v3)
+
+```
+
+
+## Quarta versão do modelo com dados de treino e sem variáveis de educação e genero
+
+```{r}
+
+modelo_v4 <- glm(Attrition ~ Age + Department + DistanceFromHome + `Employee Source` + 
+                   JobRole + MaritalStatus + AverageTenure + PriorYearsOfExperience, 
+                 family = binomial, 
+                 data = dados_rh_1_treino)
+
+
+
+```
+
+
+```{r}
+summary(modelo_v4)
+
+```
+
+```{r}
+vif(modelo_v4)
+
+
+```
+
+```{r}
+# Previsões
+threshold <- 0.5
+previsoes_v4 <- predict(modelo_v4, type = 'response', newdata = dados_rh_1_teste)
+previsoes_finais_v4 <- ifelse(previsoes_v4 > threshold, 'Voluntary Resignation', 'Current employee')
+table(dados_rh_1_teste$Attrition, previsoes_finais_v4)
+```
+Os três modelos feito mostrou a relevancia dos JobRole ,PriorYearsOfExperience e AverageTenure. apresentar esses valores aos tomadores de decisão.
+
+
+
+## Quinta versão do modelo com dados de treino e sem variáveis de educação, genero e outro algoritmo
+
+
+
+```{r}
+?rpart
+modelo_v5 <- rpart(Attrition ~ Age + Department + DistanceFromHome + JobRole + MaritalStatus + 
+                     AverageTenure + PriorYearsOfExperience, 
+                   method = "class", 
+                   control = rpart.control(minsplit = 500, cp = 0),
+                   data = dados_rh_1_treino)
+
+
+
+```
+
+```{r}
+summary(modelo_v5)
+
+```
+
+
+```{r}
+
+#Arvore de decisão
+rpart.plot(modelo_v5)
+```
+RESUMO:
+
+Apresentar esse grafico par aos gestores, é uma forma facil de interpretar. 
+Observamos que a classe idade tem grande peso. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
