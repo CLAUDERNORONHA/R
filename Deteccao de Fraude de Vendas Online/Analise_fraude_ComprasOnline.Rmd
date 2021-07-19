@@ -1,0 +1,836 @@
+---
+title: "Detecção de Fraude de Vendas Online"
+author: "Clauder"
+date: "16/07/2021"
+output: html_document
+---
+
+## Golpes de Compras Online
+
+
+Os golpes de compras online envolvem golpistas que fingem ser vendedores online legítimos, seja com um site falso ou um anúncio falso em um site varejista genuíno.
+
+Embora muitos vendedores online sejam legítimos, infelizmente os golpistas podem usar a natureza anônima da Internet para enganar compradores desavisados.
+
+Os golpistas usam a tecnologia mais recente para criar sites de varejo falsos que parecem lojas de varejo online genuínas. Eles podem usar designs e layouts sofisticados, logotipos possivelmente roubados e até mesmo um nome de domínio semelhante a um varejista autêntico.
+
+Muitos desses sites oferecem itens de luxo, como marcas populares de roupas, joias e eletrônicos a preços muito baixos. Às vezes, você receberá o item pelo qual pagou. Muito provavelmente, se você receber algo, será uma cópia do item que você pensou ter comprado. Outras vezes, você não receberá absolutamente nada.
+
+A maior dica de que um site de varejo é uma fraude é o método de pagamento. Os golpistas costumam pedir que você pague usando uma ordem de pagamento, cartão de dinheiro pré-carregado ou transferência eletrônica, mas se você enviar seu dinheiro dessa forma, é improvável que você o veja novamente ou receba o item comprado.
+
+Uma versão mais recente de golpes de compras online envolve o uso de plataformas de mídia social para configurar lojas online falsas. Os golpistas abrem a loja por um curto período de tempo, geralmente vendendo joias ou roupas de marcas falsas. Depois de fazer várias vendas, as lojas desaparecem. Os golpistas também usam a mídia social para anunciar seu site falso, portanto, não confie em um site apenas porque o viu anunciado ou compartilhado nas redes sociais. A melhor maneira de detectar um comerciante falso ou um golpe de compra on-line em mídia social é pesquisar avaliações antes de comprar.
+
+
+
+
+
+Pacotes
+```{r}
+#install.packages("arsenal")
+#install.packages("e1071")
+# Pacotes
+library(ggplot2)
+library(caret)#matrix de confusao
+library(dplyr)
+library(tibble)
+library(tidyverse)
+library(data.table)
+library(e1071)
+# https://cran.r-project.org/web/packages/arsenal/vignettes/comparedf.html
+library(arsenal)#Comparação de DataFrames
+
+```
+
+```{r}
+# Carregando os Dados
+treino_id = read.csv(file = "dados/train_identity.csv", na.strings = "")
+treino_transacoes = read.csv(file = "dados/train_transaction.csv", na.strings = "")
+teste_id = read.csv(file = "dados/test_identity.csv", na.strings = "")
+teste_transacoes = read.csv("dados/test_transaction.csv", na.strings = "")
+```
+
+
+# Tratamentos dos Dados
+
+
+
+
+### Dados de Treino
+
+
+```{r}
+
+#Explorar os dados
+dim(treino_id)
+  
+```
+```{r}
+dim(treino_transacoes)
+```
+```{r}
+str(treino_id)
+```
+```{r}
+View(treino_id)
+```
+
+```{r}
+View(treino_transacoes)
+```
+
+
+
+# Dados de Teste
+
+```{r}
+dim(teste_id)
+```
+```{r}
+dim(teste_transacoes)
+```
+```{r}
+str(teste_id)
+```
+```{r}
+str(teste_transacoes)
+```
+
+##  Ajustando a variável target em treino e teste
+
+```{r}
+#Unir os dois Dataframes de treino e teste e unir, para que possamos realizar todo o processo de limpeza e
+#treino.
+
+#Nomes das colunas
+names(treino_transacoes)
+
+
+
+```
+```{r}
+names(teste_transacoes)
+```
+#### Ajustando a variavel target em treino e teste
+
+```{r}
+#Criando a coluna isFraud e vamos atribuir valores NA
+treino_transacoes[,"isFraud"] = factor(treino_transacoes[,"isFraud"])
+teste_transacoes$isFraud <- NA
+```
+
+
+Conferindo as Dimensões
+
+```{r}
+dim(treino_transacoes)
+```
+```{r}
+dim(teste_transacoes)
+```
+Agora tems os dois dataFrames com a mesma quantidade de colunas.
+
+
+
+### Vamos criar um Merge dos DataFrames para Facilitar o Trabalho de LImpeza
+```{r}
+dados_treino = merge(x = treino_id, y = treino_transacoes, by = "TransactionID")
+```
+```{r}
+dados_teste = merge(x = teste_id, y = teste_transacoes, by = "TransactionID")
+
+```
+
+## Descobrir as Dimensões
+
+```{r}
+dim(dados_treino)
+```
+```{r}
+dim(dados_teste)
+```
+
+Vamos criar mais coluna como o nome de Label e vamos acrescentar os valores de treino em todas as linhas
+
+```{r}
+#Criando uma coluna para identificar mais tarde se o resgistro é de treino ou de teste
+
+dados_treino$label = "treino"
+```
+```{r}
+dados_teste$label = "teste"
+```
+
+### Dimensões
+```{r}
+dim(dados_treino)
+```
+```{r}
+dim(dados_teste)
+```
+### vamos gerar um Dataset completo com as duas amostrar de dado(Treino e Teste)
+
+```{r}
+dados_full <- rbind(dados_teste, dados_treino)
+```
+```{r}
+#troubleShooting - procurar o erro. Vamos fazer uma revisão, levantamos os arquivos em  treino e teste.
+#coloamos os dois Dataframes com a mesma quantidade de colunas, criamos o Merge dos dois Dataframes para gerar dois novos dataframes. 
+
+#Vamos isolar o problema, Error in match.names(clabs, names(xi))diz que houve um erro ao fazer o metch, o rbind é ligação por linha, as colunas tem que ter correespondencia, pode ser erro de digitação , erros de de caracteres,
+
+```
+
+
+### TROUBBLESHOOTING
+
+```{r}
+#Nomes da colunas
+
+names(dados_treino)
+```
+
+```{r}
+names(dados_teste)
+```
+##### O erro esta nas colunas, as duas colunas que criamos no dataset de dados_teste apareceu abaixo (isFraud e label) estão em ordem diferente.
+
+
+### Organizar os Nomes
+
+```{r}
+#Explicação - O sinal de Menos que dizer seleciona toda as colunas menos a label e isFroud
+dados_treino <- dados_treino %>%
+  select(-label, -isFraud, everything())
+```
+```{r}
+dados_teste <- dados_teste %>%
+  select(-label, -isFraud, everything())
+```
+
+## NOmes das Colunas
+
+```{r}
+names(dados_treino)
+```
+
+```{r}
+names(dados_teste)
+```
+
+### Agora vamos usar o Rbind mais uma vez
+
+```{r}
+dados_full <- rbind(dados_treino, dados_teste)
+```
+Deu erro de Novo!!!!!!
+
+Vamos utilizar o pacote Arsena para comparar os dois DataFrames
+
+```{r}
+?comparedf
+
+comparedf(dados_treino, dados_teste)
+```
+##### Observamos que os dois dataFrames os nomes das colunas  estão com digitações diferentes. Uma esta com (.) e a outra esta com (_)
+
+
+
+```{r}
+#Vamos criar uma lista com os momes dos dois Dataframes
+dfs <- c("dados_treino", "dados_teste")
+```
+
+```{r}
+# Loop por todas as colunas dos dataframes para ajustar os nomes das colunas
+for (eachdf in dfs) {# percorrer cada uma dos dataframes da lista (treino e teste)
+  df.tmp <- get(eachdf)# Criar uma copia de cada dataframe 
+  for (eachcol in 1:length(df.tmp)){# Para cada coluna vou pegar a coluna vou tirar o espaço com trim e vou tirar os espaçoes e onde tiver _ vou colocar .
+    colnames(df.tmp)[eachcol] <- str_trim(str_to_lower(str_replace_all(colnames(df.tmp)[eachcol], "_", ".")))
+  }
+  assign(eachdf, df.tmp) #Coloco a modificação do Dataframe temporario no final
+}
+
+```
+
+### Vamos gerar o Dataset com as duas amostras
+
+```{r}
+dados_full <- rbind(dados_treino, dados_teste)
+```
+
+AGORA SIM, RODOUUUUUUU!!!!!
+
+```{r}
+dim(dados_full)
+```
+```{r}
+str(dados_full)
+```
+
+# Tratamento valores ausentes 
+
+##### Estratégia 1 - Remover variáveis cujo percentual de valor ausente for superior a 50%
+##### Estratégia 2 - Para as variáveis remanescentes, atribuir o valor "Desconhecido" se for variável categórica
+##### Estratégia 3 - Para as variáveis remanescentes, atribuir a média se for variável quantitativa
+
+## Aplicando a Estratégia 1
+
+```{r}
+percentual_valores_ausentes = (colSums(is.na(dados_full)) / nrow(dados_full)) * 100
+percentual_valores_ausentes
+```
+```{r}
+# Dataframe com o resultado anterior para criar o plot
+df_percent_NA = data.frame(colnames(dados_full), percentual_valores_ausentes)
+colnames(df_percent_NA) <- c("Variavel", "Percentual_Ausente")
+df_percent_NA = df_percent_NA[order(df_percent_NA$Percentual_Ausente, decreasing = TRUE), ]
+```
+
+```{r}
+View(df_percent_NA)
+```
+```{r}
+dim(df_percent_NA)
+```
+Construir um PLOT, ver os valores ausentes.
+
+```{r}
+plot(df_percent_NA$Percentual_Ausente, 
+     ylab = "% de Valores Ausentes", 
+     main = "Percentual de Valores Ausentes")
+```
+
+### Vamos remover as colunas com mais de 50% de valores ausentes
+
+```{r}
+dim(dados_full)
+```
+```{r}
+dados_full <- dados_full[percentual_valores_ausentes < 50]
+```
+
+```{r}
+dim(dados_full)
+```
+
+## Aplicando a Extrategia 2 e 3
+
+```{r}
+# Colunas ainda com valores ausentes
+outrasNAcol <- (dados_full)[!colSums(is.na(dados_full))==0]#saber se tem alguma valor NA e soma, e verifique se a soma é igual a 0. 
+outrasNAcol <- colnames(outrasNAcol)
+
+```
+
+
+
+###  Vamos colocar o valor "Desconhecido" onde estiver NA se for variável qualitativa
+## Para variáveis quantitativas substituímos NA pela méda
+```{r}
+
+for(f in outrasNAcol){
+  
+  if(any(is.na(dados_full[[f]]))){
+    
+    if(is.factor(dados_full[,f])){
+      
+      dados_full[,f] <- as.character(dados_full[,f])
+      
+      # Estratégia 2
+      dados_full[,f][is.na(dados_full[,f])] <- "Desconhecido"
+      dados_full[,f] <- factor(dados_full[,f])
+      
+    }
+    else{
+      
+      # Estratégia 3
+      dados_full[is.na(dados_full[,f]),f] <- mean(dados_full[,f], na.rm = TRUE)
+    }
+  }
+}
+```
+
+
+# Verifica o dataframe
+```{r}
+
+str(dados_full)
+
+```
+
+```{r}
+names(dados_full)
+
+```
+```{r}
+dim(dados_full)
+
+```
+
+```{r}
+sum(is.na(dados_full))
+```
+###### OBS: Smpre tirar os dados ausentes.
+
+
+### Convertemos as variáveis categóoricas para o tipo fator
+
+```{r}
+
+str(dados_full)
+dados_full[,"card1"] = factor(dados_full[,"card1"])
+dados_full[,"card2"] = factor(dados_full[,"card2"])
+dados_full[,"card3"] = factor(dados_full[,"card3"])
+dados_full[,"card4"] = factor(dados_full[,"card4"])
+dados_full[,"card5"] = factor(dados_full[,"card5"])
+dados_full[,"card6"] = factor(dados_full[,"card6"])
+dados_full[,"addr1"] = factor(dados_full[,"addr1"])
+dados_full[,"addr2"] = factor(dados_full[,"addr2"])
+dados_full[,"p.emaildomain"] = factor(dados_full[,"p.emaildomain"])
+dados_full[,"r.emaildomain"] = factor(dados_full[,"r.emaildomain"])
+dados_full[,"devicetype"] = factor(dados_full[,"devicetype"])
+dados_full[,"deviceinfo"] = factor(dados_full[,"deviceinfo"])
+dados_full[,"id.12"] = factor(dados_full[,"id.12"]) 
+dados_full[,"id.13"] = factor(dados_full[,"id.13"]) 
+dados_full[,"id.14"] = factor(dados_full[,"id.14"]) 
+dados_full[,"id.15"] = factor(dados_full[,"id.15"])
+dados_full[,"id.16"] = factor(dados_full[,"id.16"]) 
+dados_full[,"id.17"] = factor(dados_full[,"id.17"])
+dados_full[,"id.19"] = factor(dados_full[,"id.19"])
+dados_full[,"id.20"] = factor(dados_full[,"id.20"]) 
+dados_full[,"id.28"] = factor(dados_full[,"id.28"]) 
+dados_full[,"id.29"] = factor(dados_full[,"id.29"]) 
+dados_full[,"id.30"] = factor(dados_full[,"id.30"]) 
+dados_full[,"id.31"] = factor(dados_full[,"id.31"]) 
+dados_full[,"id.32"] = factor(dados_full[,"id.32"]) 
+dados_full[,"id.33"] = factor(dados_full[,"id.33"])
+dados_full[,"id.34"] = factor(dados_full[,"id.34"])
+dados_full[,"id.35"] = factor(dados_full[,"id.35"]) 
+dados_full[,"id.36"] = factor(dados_full[,"id.36"]) 
+dados_full[,"id.37"] = factor(dados_full[,"id.37"]) 
+dados_full[,"id.38"] = factor(dados_full[,"id.38"]) 
+```
+
+##### porque é importante converter, é porque o R cria indice para cada categoria. 
+
+## Em variáveis do tipo texto vamos aplicar limpeza ao texto para poder separar as categorias
+```{r}
+
+
+# Variável deviceinfo
+View(table(dados_full$deviceinfo))
+
+
+```
+
+```{r}
+names_deviceinfo <- dados_full$deviceinfo
+
+```
+
+```{r}
+dados_full$deviceinfo <- factor(gsub("([A-Za-z]+).*",  "\\1", names_deviceinfo, ignore.case = FALSE))
+
+```
+
+```{r}
+View(table(dados_full$deviceinfo))
+```
+
+### Variável id.30
+
+```{r}
+
+View(table(dados_full$id.30))
+names_id.30 <- dados_full$id.30
+dados_full$id.30 <- factor(gsub("([A-Za-z]+).*",  "\\1", names_id.30, ignore.case = FALSE))#fazer uma limpeza tirando os caracteres
+
+```
+
+```{r}
+View(table(dados_full$id.30))
+```
+
+
+##  Variável card4
+
+```{r}
+#
+View(table(dados_full$card4))
+dados_full$card4 = recode_factor(dados_full$card4, 
+                                 'american express' = "OTHER",  
+                                 'discover' = "OTHER", 
+                                 'visa' = "visa",  #Manter o nome 
+                                 'mastercard' = "mastercard", #Manter o nome   
+                                 .default = "OTHER")
+View(table(dados_full$card4))
+
+```
+
+
+## Variável card6
+```{r}
+
+View(table(dados_full$card6))
+dados_full$card6 = recode_factor(dados_full$card6,
+                                 'credit' = "credit", 
+                                 'debit' = "debit",
+                                 .default = "OTHER")
+View(table(dados_full$card6))
+```
+
+
+## Ajusta a variável alvo removendo o nível onde a categoria for "Desconhecido" 
+```{r}
+
+View(table(dados_full$isfraud))
+dados_full$isfraud = factor(x = dados_full$isfraud, exclude = "Desconhecido")
+View(table(dados_full$isfraud))
+```
+
+
+## Dimensões
+```{r}
+
+dim(dados_full)
+
+```
+```{r}
+colnames(dados_full)
+```
+## Divisão dos Dados em Treino e Teste
+```{r}
+
+dados_treino_final = subset(dados_full, label == "treino")
+dados_teste_final = subset(dados_full, label == "teste")
+```
+
+## Dimensões
+
+```{r}
+
+dim(dados_treino_final)
+
+```
+
+```{r}
+dim(dados_teste_final)
+```
+
+## Colunas
+```{r}
+
+names(dados_treino_final)
+
+```
+
+```{r}
+names(dados_teste_final)
+```
+
+## GRAFICOS
+
+
+### Análise Exploratória
+```{r}
+
+ggplot(dados_treino_final,
+       aes(x = factor(devicetype), fill = isfraud)) +
+  geom_bar() + 
+  scale_fill_brewer(palette = "Dark2")
+
+
+```
+A mioria dos acesssos no porta foi feito por um Desktop
+
+```{r}
+ggplot(dados_treino_final, 
+       aes(x = factor(productcd), fill = isfraud)) +
+  geom_bar(position = "fill") + 
+  scale_fill_brewer(palette = "Set2")
+
+
+```
+O produto do codigo C teve um maior alvo dos fraudadores.
+
+
+```{r}
+ggplot(dados_treino_final,
+       aes(x = factor(p.emaildomain), fill = isfraud)) +
+  geom_bar() + 
+  coord_flip() + 
+  scale_fill_brewer(palette = "Set1")
+```
+O Gmail foi o mais utilizado para tentativa de fraudes. 
+
+
+## Checando outliers na quantidade das transações
+
+```{r}
+
+ggplot(dados_treino_final,
+       aes(factor(isfraud), transactionamt)) +
+  geom_boxplot()
+```
+Observamos que , o fato que atransação ser um outliers não necessariamente  diz que existe uma fraude. 
+
+
+## Proporção por classe
+```{r}
+
+table(dados_treino_final$isfraud)
+```
+Da classe Zero mostrar que não teve muitas fraudes. 
+
+
+
+
+
+
+# Divisão em dados de treino e teste
+```{r}
+
+set.seed(100)
+?createDataPartition
+indice <- createDataPartition(dados_treino_final$isfraud, p = .7, list = F) #Criar 70 % dos registros
+df_treino <- dados_treino_final[indice, ]
+df_valid <- dados_treino_final[-indice, ]
+```
+
+
+###Dimensão
+```{r}
+dim(df_treino)
+```
+```{r}
+dim(df_valid)
+```
+### Remove a coluna de label e amostra os dados
+```{r}
+
+set.seed(100)
+names(df_treino)
+
+```
+
+```{r}
+df_treino_final = select(df_treino, -395)
+
+```
+```{r}
+dim(df_treino_final)
+
+```
+
+```{r}
+names(df_treino_final)
+
+```
+
+```{r}
+df_treino_final_sample <- sample(df_treino_final, replace = FALSE, prob = NULL)
+
+```
+
+```{r}
+dim(df_treino_final_sample)
+
+```
+
+```{r}
+names(df_treino_final_sample)
+```
+## Modelagem
+```{r}
+
+
+# Modelo de Regressão Logística
+?glm
+modelo_v1 <- glm(formula = isfraud ~ productcd + card4 + card6 + devicetype + id.30,#Utilizar apenas 5 variaveis
+                 data = df_treino_final_sample,
+                 family = "binomial")#Binaria
+```
+
+
+```{r}
+summary(modelo_v1)
+```
+
+
+## Avaliação do Modelo
+```{r}
+#Vou usar o df_valid, porque dentro tenho a variavel ALVO
+
+previsoes <- predict(modelo_v1, newdata = df_valid, type = "response")
+
+
+```
+
+
+```{r}
+#Temos aqui as probabilidades
+View(previsoes)
+
+```
+
+Utilizaremos o CUTOFF para colocar 0 e 1
+```{r}
+y_pred_num <- ifelse(previsoes > 0.5, 1, 0)
+```
+
+
+## Previsões de Classe
+
+```{r}
+y_pred <- factor(y_pred_num, levels = c(0,1))
+```
+
+## Valor Real de Y
+
+```{r}
+y_act <- df_valid$isfraud
+
+y_act <- factor(y_act, levels = c(0,1))
+```
+
+
+### Matriz de Confusão e Acuracia
+
+```{r}
+confusionMatrix(y_act, y_pred)
+```
+ Accuracy : 0.9216 o modelo tem uma boa accuracy o modelo acertou  0 39873  e teve um erro de 1  . globalmente o modelo tem uma boa accuracy e localmente ele acerta mais uma classe do que a outra.
+ Mas porque ?
+ É porque o modelo tem mais um exemplo de uma classe do que a outra. 
+ 
+ Com base nisso, temos que obsernão so as metas globais como as locais.
+ 
+Temos que melhorar o equilibrio dos dados, como?
+Tratando os dados.
+ 
+
+## Previsões com Novos Dados 
+
+```{r}
+previsoes_novos_dados = predict(modelo_v1, newdata = dados_teste_final, type = "response")
+
+
+
+```
+
+### Salvar o Dataframe
+```{r}
+
+
+write.csv(previsoes , file = 'dados/previsoes.csv' , row.names = FALSE )
+```
+
+
+
+```{r}
+previsoes <- data.frame(TransactionID = dados_teste_final$transactionid , fraud = previsoes_novos_dados)
+
+```
+
+
+
+
+Vamos ter a probalidade de ter uma trasação fraudulenta, temos a probalidade para cada uma das transações.
+```{r}
+View(previsoes)
+```
+
+```{r}
+str(previsoes)
+```
+
+
+
+#### PROTEJA-SE
+
+* Verifique se o site ou página de mídia social tem uma política de reembolso ou devolução e se suas políticas parecem justas. Os melhores sites de compras e leilões online têm processos detalhados de tratamento de reclamações ou disputas caso algo dê errado.
+
+
+* Ao usar sites de varejo, descubra exatamente com quem você está lidando. Pesquise o varejista e saiba se você está lidando com uma entidade nacional ou estrangeira e se os itens que está solicitando serão enviados do exterior.
+
+
+* Ao fazer pagamentos online, pague apenas por itens usando um serviço de pagamento seguro - procure um URL começando com “https” e um símbolo de cadeado fechado, ou um provedor de pagamento como o PayPal. Pense duas vezes antes de usar moedas virtuais como bitcoin - elas não têm as mesmas proteções de outros métodos de transação, portanto, você não pode receber seu dinheiro de volta depois de enviá-lo.
+
+
+* Evite qualquer acordo com um estranho que peça um pagamento adiantado por meio de ordem de pagamento, transferência eletrônica, transferência internacional de fundos, cartão pré-carregado ou moeda eletrônica, como Bitcoin. É raro recuperar dinheiro enviado desta forma. Nunca envie dinheiro ou forneça detalhes do cartão de crédito ou da conta online a alguém que você não conhece ou não confia.
+
+
+
+
+FIM!!!!!!!!!!!!
+Clauder Noronha
+
+https://claudernoronha.github.io/cn/
+
+61 98587-3542
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
